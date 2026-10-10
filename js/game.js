@@ -32,8 +32,6 @@ class Sfx {
       this.master.connect(this.ctx.destination);
     }
   }
-  // Short procedural blip — type shapes the envelope. No audio assets needed.
-  // `arg` carries the weapon (for 'shot') or the streak count (for 'streak').
   play(type, arg = null) {
     try {
       this.ensure();
@@ -42,7 +40,6 @@ class Sfx {
       const gain = ctx.createGain();
       gain.connect(this.master);
       if (type === 'shot' || type === 'botshot') {
-        // per-weapon timbre: filter cutoff, length, level and a low-end "body" thump
         const prof = type === 'botshot' ? { freq: 1100, len: 0.09, gain: 0.08, body: 0 }
           : (SHOT_PROFILES[arg && arg.type] || { freq: 2400, len: 0.09, gain: 0.22, body: 0 });
         const jitter = 0.92 + Math.random() * 0.16; // subtle per-shot variation
@@ -64,7 +61,6 @@ class Sfx {
           o.connect(bg); o.start(t); o.stop(t + len * 1.5);
         }
       } else if (type === 'streak') {
-        // ascending arpeggio — more notes / higher pitch for bigger streaks
         const count = Math.min(arg || 2, 6), base = 520;
         for (let i = 0; i < count; i++) {
           const tt = t + i * 0.07;
@@ -114,12 +110,13 @@ function buildMap(scene) {
   const colliders = []; // AABB boxes for player + bullet collision
   const shootables = []; // meshes raycast for bullets
 
-  const matFloor = new THREE.MeshStandardMaterial({ color: 0x3d4a57, roughness: 0.95 });
-  const matWall = new THREE.MeshStandardMaterial({ color: 0x5a6b7d, roughness: 0.9 });
-  const matCrate = new THREE.MeshStandardMaterial({ color: 0x76879b, roughness: 0.85 });
-  const matAccent = new THREE.MeshStandardMaterial({ color: 0xff4655, emissive: 0xff4655, emissiveIntensity: 0.55 });
-  const matTeal = new THREE.MeshStandardMaterial({ color: 0x53d9d1, emissive: 0x53d9d1, emissiveIntensity: 0.5 });
-  const matDark = new THREE.MeshStandardMaterial({ color: 0x4d5b69, roughness: 1 });
+  // Vibrant, saturated, high-contrast Valorant-inspired palette & materials
+  const matFloor = new THREE.MeshStandardMaterial({ color: 0x1a2634, roughness: 0.8, metalness: 0.15 });
+  const matWall = new THREE.MeshStandardMaterial({ color: 0x2e3f52, roughness: 0.75, metalness: 0.1 });
+  const matCrate = new THREE.MeshStandardMaterial({ color: 0x4a5d73, roughness: 0.65, metalness: 0.25 });
+  const matAccent = new THREE.MeshStandardMaterial({ color: 0xff3848, emissive: 0xff3848, emissiveIntensity: 0.95, roughness: 0.25 });
+  const matTeal = new THREE.MeshStandardMaterial({ color: 0x00f5ff, emissive: 0x00f5ff, emissiveIntensity: 0.9, roughness: 0.2 });
+  const matDark = new THREE.MeshStandardMaterial({ color: 0x0f1722, roughness: 0.95 });
 
   function box(w, h, d, x, y, z, mat = matCrate, solid = true) {
     const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
@@ -142,8 +139,8 @@ function buildMap(scene) {
   scene.add(floor);
   shootables.push(floor);
 
-  // floor markings — painted site letters
-  const grid = new THREE.GridHelper(120, 60, 0x2f3b48, 0x222c37);
+  // floor grid helper with vibrant cyan accent
+  const grid = new THREE.GridHelper(120, 60, 0x00f5ff, 0x243447);
   grid.position.y = 0.01;
   scene.add(grid);
 
@@ -161,7 +158,7 @@ function buildMap(scene) {
   box(10, 3.4, 1, 0, 1.7, 14, matWall);
 
   // A site (north-west)
-  box(8, 2.6, 8, -18, 1.3, -18, matDark);           // raised platform block
+  box(8, 2.6, 8, -18, 1.3, -18, matDark);            // raised platform block
   box(2.2, 2.2, 2.2, -12, 1.1, -20, matCrate);
   box(2.2, 2.2, 2.2, -22, 1.1, -12, matCrate);
   box(2.2, 1.1, 2.2, -12, 0.55, -12, matCrate);
@@ -191,23 +188,27 @@ function buildMap(scene) {
     box(6, 0.18, 0.12, i * 12, 3.4, W - 0.6, i % 2 ? matTeal : matAccent, false);
   }
 
-  // lighting
-  scene.fog = new THREE.FogExp2(0x141f2b, 0.014);
-  scene.background = new THREE.Color(0x16222e);
-  const hemi = new THREE.HemisphereLight(0xbdd4e8, 0x46525e, 1.6);
+  // Atmospheric lighting & vibrant fog
+  scene.fog = new THREE.FogExp2(0x0a111a, 0.013);
+  scene.background = new THREE.Color(0x0a111a);
+  
+  const hemi = new THREE.HemisphereLight(0xdbeafe, 0x1a2634, 1.9);
   scene.add(hemi);
-  const sun = new THREE.DirectionalLight(0xffe8d0, 3.2);
-  sun.position.set(20, 32, 12);
+  
+  const sun = new THREE.DirectionalLight(0xfff6ea, 4.0);
+  sun.position.set(25, 35, 15);
   sun.castShadow = true;
   sun.shadow.mapSize.set(2048, 2048);
   sun.shadow.camera.left = -40; sun.shadow.camera.right = 40;
   sun.shadow.camera.top = 40; sun.shadow.camera.bottom = -40;
   scene.add(sun);
-  const redGlow = new THREE.PointLight(0xff4655, 6, 22);
-  redGlow.position.set(-18, 3, -18);
+
+  const redGlow = new THREE.PointLight(0xff3848, 9, 28);
+  redGlow.position.set(-18, 4, -18);
   scene.add(redGlow);
-  const tealGlow = new THREE.PointLight(0x53d9d1, 6, 22);
-  tealGlow.position.set(18, 3, 18);
+
+  const tealGlow = new THREE.PointLight(0x00f5ff, 9, 28);
+  tealGlow.position.set(18, 4, 18);
   scene.add(tealGlow);
 
   const spawnPoints = [
@@ -222,11 +223,8 @@ function buildMap(scene) {
 
 // ---------------------------------------------------------------- bots
 const BOT_NAMES = ['REYNA-BOT', 'PHX-UNIT', 'OMEN-77', 'CYPHER.EXE', 'KAYO-MK2', 'VIPER-X', 'SAGE-9000'];
-
-// KayKit skeleton faces +Z; combined with group.lookAt this points it at its
-// target, so no extra yaw is needed.
 const BOT_MODEL_YAW = 0;
-const BOT_MODEL_H = 1.45; // skeleton stands this tall (chibi proportions)
+const BOT_MODEL_H = 1.45;
 
 class Bot {
   constructor(scene, spawn, name, asset = null) {
@@ -241,18 +239,10 @@ class Bot {
     this.speed = 3.2 + Math.random() * 1.2;
     const hasModel = !!(asset && asset.model);
 
-    const bodyMat = new THREE.MeshStandardMaterial({ color: 0xb8323e, roughness: 0.6, emissive: 0x550b12, emissiveIntensity: 0.6 });
-    const headMat = new THREE.MeshStandardMaterial({ color: 0xff4655, roughness: 0.4, emissive: 0xff4655, emissiveIntensity: 0.35 });
+    const bodyMat = new THREE.MeshStandardMaterial({ color: 0xff3848, roughness: 0.5, emissive: 0x7f111a, emissiveIntensity: 0.7 });
+    const headMat = new THREE.MeshStandardMaterial({ color: 0xffe8e1, roughness: 0.3, emissive: 0xff3848, emissiveIntensity: 0.4 });
 
     this.group = new THREE.Group();
-    // Body + head double as the bullet hitboxes. When a glTF model is shown they
-    // become invisible (material.visible=false) but stay raycastable — so all the
-    // existing headshot logic keeps working unchanged. The chibi skeleton needs a
-    // big head sphere up over the skull and a short body; the procedural fallback
-    // keeps the original human-ish capsule that matches its visible shape.
-    // For the chibi skeleton, derive the hitbox from its height so it stays
-    // correct if BOT_MODEL_H changes: big head sphere over the skull (top ~30%),
-    // short body capsule over torso+legs. Procedural fallback keeps human-ish dims.
     const H = BOT_MODEL_H;
     const bodyR = hasModel ? 0.235 * H : 0.38, bodyCyl = hasModel ? 0.31 * H : 0.85, bodyY = hasModel ? 0.31 * H : 0.85;
     const headR = hasModel ? 0.30 * H : 0.24, headY = hasModel ? 0.70 * H : 1.62;
@@ -264,7 +254,7 @@ class Bot {
     this.head.castShadow = true;
     this.visor = new THREE.Mesh(
       new THREE.BoxGeometry(0.34, 0.07, 0.1),
-      new THREE.MeshStandardMaterial({ color: 0x53d9d1, emissive: 0x53d9d1, emissiveIntensity: 1.4 })
+      new THREE.MeshStandardMaterial({ color: 0x00f5ff, emissive: 0x00f5ff, emissiveIntensity: 1.6 })
     );
     this.visor.position.set(0, 1.64, 0.2);
     this.group.add(this.body, this.head, this.visor);
@@ -272,14 +262,12 @@ class Bot {
     this.head.userData.bot = this; this.head.userData.part = 'head';
     this.group.position.copy(spawn);
 
-    // ---- animated glTF skeleton (optional visual) ----
     this.mixer = null;
     this.actions = {};
     this.current = null;
     this.skinMeshes = [];
     if (hasModel) {
       const m = asset.model;
-      // normalize height, feet on the ground
       const h = new THREE.Box3().setFromObject(m).getSize(new THREE.Vector3()).y || 1.7;
       m.scale.setScalar(BOT_MODEL_H / h);
       m.position.y -= new THREE.Box3().setFromObject(m).min.y;
@@ -288,8 +276,6 @@ class Bot {
       this.modelWrap.rotation.y = BOT_MODEL_YAW;
       this.modelWrap.add(m);
       this.group.add(this.modelWrap);
-      // hide the hitbox meshes (still raycast — Raycaster honors Object3D.visible,
-      // which stays true; only the material is hidden)
       for (const hb of [this.body, this.head, this.visor]) { hb.material.visible = false; hb.castShadow = false; }
       this.mixer = new THREE.AnimationMixer(m);
       for (const [key, clipName] of Object.entries(CLIPS)) {
@@ -301,7 +287,6 @@ class Bot {
     scene.add(this.group);
   }
 
-  // Crossfade to a named animation state.
   playAction(key, { once = false } = {}) {
     const a = this.actions[key];
     if (!a || a === this.current) return;
@@ -314,18 +299,17 @@ class Bot {
   }
 
   setRevealed(on) {
-    // Recon reveal — render through walls with a hot glow.
     if (this.skinMeshes.length) {
       for (const o of this.skinMeshes) {
         o.material.depthTest = !on;
-        o.material.emissiveIntensity = on ? 2.4 : 0.5;
+        o.material.emissiveIntensity = on ? 2.8 : 0.5;
         o.renderOrder = on ? 999 : 0;
       }
       return;
     }
     for (const m of [this.body, this.head]) {
       m.material.depthTest = !on;
-      m.material.emissiveIntensity = on ? 2.2 : (m === this.head ? 0.35 : 0.6);
+      m.material.emissiveIntensity = on ? 2.5 : (m === this.head ? 0.4 : 0.7);
       m.renderOrder = on ? 999 : 0;
     }
   }
@@ -342,11 +326,11 @@ class Bot {
     const now = performance.now() / 1000;
     this.respawnAt = now + RESPAWN_DELAY + Math.random() * 2;
     if (this.mixer) {
-      this.current = null; // force the crossfade
+      this.current = null;
       this.playAction('death', { once: true });
-      this.hideAt = now + 1.6; // linger so the death animation plays out
+      this.hideAt = now + 1.6;
     } else {
-      this.group.visible = false; // procedural fallback: vanish as before
+      this.group.visible = false;
     }
   }
 
@@ -365,9 +349,9 @@ export class Game {
   constructor(canvas, agent, callbacks, models = null) {
     this.canvas = canvas;
     this.agent = agent;
-    this.cb = callbacks; // { onQuit }
-    this.models = models; // preloaded glTF store (null → procedural fallback)
-    this.mixers = []; // active AnimationMixers (bots, decoy)
+    this.cb = callbacks;
+    this.models = models;
+    this.mixers = [];
     this.sfx = new Sfx();
 
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
@@ -375,7 +359,7 @@ export class Game {
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    this.renderer.toneMappingExposure = 1.25;
+    this.renderer.toneMappingExposure = 1.4; // High vibrancy & glow
 
     this.scene = new THREE.Scene();
     this.baseFov = settings.fov;
@@ -385,48 +369,39 @@ export class Game {
     this.colliders = colliders;
     this.shootables = shootables;
     this.spawnPoints = spawnPoints;
-    // LOS is blocked by walls/crates but not the floor plane — precompute once.
     this.wallBlockers = shootables.filter((s) => s.geometry.type !== 'PlaneGeometry');
 
-    // pooling — reuse one raycaster, scratch vectors, and mesh pools to avoid
-    // per-shot/per-frame allocation (and the GC stutter it causes).
     this.raycaster = new THREE.Raycaster();
     this._v1 = new THREE.Vector3(); this._v2 = new THREE.Vector3(); this._v3 = new THREE.Vector3();
     this._collBox = new THREE.Box3();
     this._rayTargets = []; this._losTargets = [];
-    this.tracerMat = new THREE.LineBasicMaterial({ color: 0xffe2b0, transparent: true, opacity: 0.85 });
+    this.tracerMat = new THREE.LineBasicMaterial({ color: 0x00f5ff, transparent: true, opacity: 0.9 });
     this.tracerPool = [];
     this.impactGeo = new THREE.SphereGeometry(0.045, 6, 6);
-    this.impactMat = new THREE.MeshBasicMaterial({ color: 0xffc46b });
+    this.impactMat = new THREE.MeshBasicMaterial({ color: 0xff3848 });
     this.impactPool = [];
 
-    // player state
     this.pos = new THREE.Vector3(0, PLAYER_HEIGHT, 24);
     this.vel = new THREE.Vector3();
-    this.yaw = 0; this.pitch = 0; // yaw 0 faces -z, toward arena center
+    this.yaw = 0; this.pitch = 0;
     this.onGround = true;
     this.hp = 100; this.armor = 50;
-    this.money = 800; // credits — earn from kills, spend in the armory
+    this.money = 800;
     this.dead = false; this.deadUntil = 0;
     this.kills = 0; this.deaths = 0;
     this.killStreak = 0; this.lastKillTime = -99;
     this.ultPoints = 0;
-    this.fireRateMult = 1; // stim beacon
-    this.invisible = false; // yoru ult
+    this.fireRateMult = 1;
+    this.invisible = false;
 
-    // weapon state
     this.weapon = getWeapon('classic');
     this.preUltWeapon = null;
     this.mag = this.weapon.mag;
     this.reloading = false; this.reloadEnd = 0;
     this.lastShot = 0;
     this.recoilKick = 0;
-    this.shake = { until: 0, power: 0, dur: 0.001 }; // screen shake
+    this.shake = { until: 0, power: 0, dur: 0.001 };
 
-    // abilities — each slot tracks charges that recharge independently in
-    // parallel (e.g. Raze's 2 Blast Packs: use one, it recharges while the other
-    // stays ready; use both, both recharge at once). `cooldowns` mirrors the
-    // soonest pending recharge time, kept only for the HUD countdown.
     this.abilityState = {};
     this.cooldowns = { C: 0, Q: 0, E: 0 };
     for (const slot of ['C', 'Q', 'E']) {
@@ -434,10 +409,10 @@ export class Game {
       const max = (ab && ab.charges) || 1;
       this.abilityState[slot] = { count: max, max, cd: (ab && ab.cd) || 0, pending: [] };
     }
-    this.effects = []; // transient world objects { mesh, until, update? }
+    this.effects = [];
     this.projectiles = [];
-    this.zones = []; // damage/buff zones { pos, r, dps?, buff?, until, hostile }
-    this.gateMarker = null; // yoru E
+    this.zones = [];
+    this.gateMarker = null;
     this.ultActiveUntil = 0;
     this.reveal = { until: 0 };
 
@@ -447,10 +422,9 @@ export class Game {
     this.running = false;
     this.clock = new THREE.Clock();
 
-    // bots — each gets its own tinted skeleton clone from the shared download
     this.bots = [];
     for (let i = 0; i < BOT_COUNT; i++) {
-      const asset = this.models ? this.models.skeleton(0x6a1414) : null;
+      const asset = this.models ? this.models.skeleton(0x7f111a) : null;
       const bot = new Bot(this.scene, this.randomSpawn(), BOT_NAMES[i % BOT_NAMES.length], asset);
       if (bot.mixer) this.mixers.push(bot.mixer);
       this.bots.push(bot);
@@ -461,46 +435,42 @@ export class Game {
     this.resize();
   }
 
-  // ---------------- viewmodel
   buildViewmodel() {
     this.viewmodel = new THREE.Group();
-    const gunMat = new THREE.MeshStandardMaterial({ color: 0x2c3845, roughness: 0.5, metalness: 0.4, emissive: 0x131b26, emissiveIntensity: 1 });
-    const accent = new THREE.MeshStandardMaterial({ color: new THREE.Color(this.agent.color), emissive: new THREE.Color(this.agent.color), emissiveIntensity: 0.8 });
+    const gunMat = new THREE.MeshStandardMaterial({ color: 0x1e2d3d, roughness: 0.4, metalness: 0.6, emissive: 0x0f1722, emissiveIntensity: 1 });
+    const accent = new THREE.MeshStandardMaterial({ color: new THREE.Color(this.agent.color), emissive: new THREE.Color(this.agent.color), emissiveIntensity: 1.3 });
     const body = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.12, 0.5), gunMat);
     const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.022, 0.3, 8), gunMat);
     barrel.rotation.x = Math.PI / 2; barrel.position.set(0, 0.03, -0.38);
     const stripe = new THREE.Mesh(new THREE.BoxGeometry(0.074, 0.02, 0.3), accent);
     stripe.position.set(0, 0.045, -0.05);
-    // Procedural gun lives in its own group so it can hide when a glTF model loads.
+    
     this.procGun = new THREE.Group();
     this.procGun.add(body, barrel, stripe);
-    this.gunMount = new THREE.Group(); // holds the loaded glTF weapon, if any
-    this.muzzle = new THREE.PointLight(0xffd9a0, 0, 4);
+    this.gunMount = new THREE.Group();
+    this.muzzle = new THREE.PointLight(0x00f5ff, 0, 4);
     this.muzzle.position.set(0, 0.03, -0.55);
     this.viewmodel.add(this.procGun, this.gunMount, this.muzzle);
     this.viewmodel.scale.setScalar(0.62);
     this.viewmodel.traverse((o) => { o.frustumCulled = false; });
-    // Dedicated overlay pass: own scene + camera, rendered after the world with a depth clear.
-    // Keeps the gun out of world geometry and immune to fog/frustum issues.
+    
     this.vmZ = -0.45;
     this.viewmodel.position.set(0.26, -0.22, this.vmZ);
     this.vmScene = new THREE.Scene();
     this.vmScene.add(this.viewmodel);
-    this.vmScene.add(new THREE.HemisphereLight(0xbdd4e8, 0x46525e, 2.2));
-    const vmKey = new THREE.DirectionalLight(0xfff0dc, 2.4);
+    this.vmScene.add(new THREE.HemisphereLight(0xdbeafe, 0x1a2634, 2.6));
+    const vmKey = new THREE.DirectionalLight(0xffffff, 3.2);
     vmKey.position.set(0.6, 0.8, 0.4);
     this.vmScene.add(vmKey);
     this.vmCamera = new THREE.PerspectiveCamera(62, 1, 0.01, 10);
     this.setGunModel(this.weapon.id);
   }
 
-  // Swap the first-person weapon to its glTF model; falls back to the procedural
-  // gun if there's no store or the model fails to load.
   async setGunModel(weaponId) {
-    if (!this.models) return; // no store → keep procedural gun
+    if (!this.models) return;
     let mount = null;
     try { mount = await this.models.gun(weaponId); } catch { mount = null; }
-    if (!this.gunMount) return; // destroyed mid-load
+    if (!this.gunMount) return;
     this.gunMount.clear();
     if (mount) {
       this.gunMount.add(mount);
@@ -511,7 +481,6 @@ export class Game {
     }
   }
 
-  // ---------------- input
   bindEvents() {
     this._onKeyDown = (e) => this.onKey(e, true);
     this._onKeyUp = (e) => this.onKey(e, false);
@@ -552,9 +521,7 @@ export class Game {
   }
 
   locked() { return document.pointerLockElement === this.canvas; }
-
-  // Pointer lock can be rejected (no user gesture, sandboxed iframe) — never let that throw.
-  lock() { try { this.canvas.requestPointerLock()?.catch?.(() => {}); } catch { /* ignored */ } }
+  lock() { try { this.canvas.requestPointerLock()?.catch?.(() => {}); } catch {} }
 
   onKey(e, down) {
     if (!this.running) return;
@@ -606,7 +573,6 @@ export class Game {
     }
   }
 
-  // Re-read live settings (called when the settings menu changes a value).
   applySettings() {
     this.baseFov = settings.fov;
     if (!this.aiming) { this.camera.fov = this.baseFov; this.camera.updateProjectionMatrix(); }
@@ -618,7 +584,6 @@ export class Game {
     return this.spawnPoints[Math.floor(Math.random() * this.spawnPoints.length)].clone();
   }
 
-  // ---------------- weapons
   equip(weapon) {
     this.weapon = weapon;
     this.mag = weapon.mag;
@@ -628,10 +593,9 @@ export class Game {
     this.updateHud();
   }
 
-  // Buy a weapon if affordable; deduct credits and equip. Returns true on success.
   tryBuy(weapon) {
-    if (!weapon || weapon.id === this.weapon.id) return false; // already holding it
-    if (this.money < weapon.price) { this.sfx.play('hit'); return false; } // can't afford → buzz
+    if (!weapon || weapon.id === this.weapon.id) return false;
+    if (this.money < weapon.price) { this.sfx.play('hit'); return false; }
     this.money -= weapon.price;
     this.equip(weapon);
     return true;
@@ -675,7 +639,6 @@ export class Game {
 
     this.raycaster.set(this.camera.getWorldPosition(this._v3), dir);
     this.raycaster.near = 0; this.raycaster.far = 200;
-    // reuse the target array instead of spreading new ones each shot
     const targets = this._rayTargets; targets.length = 0;
     for (let i = 0; i < this.shootables.length; i++) targets.push(this.shootables[i]);
     for (const b of this.bots) if (b.alive) { targets.push(b.body, b.head); }
@@ -701,9 +664,8 @@ export class Game {
   onKill(bot, headshot) {
     this.kills++;
     this.ultPoints = Math.min(this.ultPoints + 1, this.agent.abilities.X.pts);
-    this.money = Math.min(this.money + (headshot ? 400 : 300), 9000); // kill reward
+    this.money = Math.min(this.money + (headshot ? 400 : 300), 9000);
     this.addShake(headshot ? 0.05 : 0.035, 0.16);
-    // kill streak — consecutive kills within a short window
     const now = this.now();
     this.killStreak = (now - this.lastKillTime < 4.5) ? this.killStreak + 1 : 1;
     this.lastKillTime = now;
@@ -744,12 +706,11 @@ export class Game {
   showHitmarker(kill) {
     const hm = document.getElementById('hitmarker');
     hm.classList.remove('show', 'kill');
-    void hm.offsetWidth; // restart animation
+    void hm.offsetWidth;
     hm.classList.add('show');
     if (kill) hm.classList.add('kill');
   }
 
-  // ---------------- abilities
   useAbility(slot) {
     const ab = this.agent.abilities[slot];
     if (!ab) return;
@@ -763,597 +724,380 @@ export class Game {
       return;
     }
     const st = this.abilityState[slot];
-    if (st.count <= 0) return; // no charges available
+    if (st.count <= 0) return;
     const used = this.castBasic(slot);
-    if (used === false) return; // ability declined (e.g. yoru E with no marker logic)
+    if (used === false) return;
     st.count--;
-    st.pending.push(t + ab.cd); // this charge returns after its cooldown
+    const rechargeUntil = t + ab.cd;
+    st.pending.push(rechargeUntil);
     st.pending.sort((a, b) => a - b);
-    this.cooldowns[slot] = st.pending[0]; // soonest recharge → HUD countdown
     this.sfx.play('ability');
     this.updateHud();
   }
 
-  // Refund charges whose recharge timer has elapsed (parallel recharge).
-  updateAbilityCharges(t) {
-    for (const slot of ['C', 'Q', 'E']) {
-      const st = this.abilityState[slot];
-      if (!st) continue;
-      while (st.pending.length && st.pending[0] <= t) { st.pending.shift(); st.count = Math.min(st.count + 1, st.max); }
-      this.cooldowns[slot] = st.pending.length ? st.pending[0] : 0;
-    }
-  }
-
-  aimDir() { return new THREE.Vector3(0, 0, -1).applyQuaternion(this.camera.quaternion); }
-
-  aimPoint(maxDist = 60) {
-    this.raycaster.set(this.camera.getWorldPosition(this._v3), this.aimDir());
-    this.raycaster.near = 0; this.raycaster.far = maxDist;
-    const hits = this.raycaster.intersectObjects(this.shootables, false);
-    return hits[0] ? hits[0].point : this.raycaster.ray.at(maxDist, new THREE.Vector3());
-  }
-
   castBasic(slot) {
-    const id = this.agent.id;
-    if (id === 'jett') {
-      if (slot === 'C') this.spawnSmoke(this.aimPoint(24), 3.2, 5, 0x9ad7e8);
-      if (slot === 'Q') { this.vel.y = 11; this.onGround = false; }
-      if (slot === 'E') {
-        const move = this.moveInputDir();
-        const dir = move.lengthSq() > 0 ? move : this.flatAimDir();
-        this.vel.x = dir.x * 26; this.vel.z = dir.z * 26;
-        this.dashUntil = this.now() + 0.16;
-      }
-    } else if (id === 'raze') {
-      if (slot === 'C') { // blast pack: launch yourself
-        const d = this.flatAimDir();
-        this.vel.x += d.x * 14; this.vel.z += d.z * 14; this.vel.y = 9;
+    const forward = this._v1.set(0, 0, -1).applyQuaternion(this.camera.quaternion);
+    const pos = this.camera.getWorldPosition(this._v2);
+
+    if (this.agent.id === 'jett') {
+      if (slot === 'C') { // Cloudburst smoke
+        const smokePos = pos.clone().add(forward.clone().multiplyScalar(6));
+        this.spawnSmoke(smokePos);
+      } else if (slot === 'Q') { // Updraft
+        this.vel.y = 9.5;
         this.onGround = false;
-        this.sfx.play('boom');
-        this.spawnExplosionVfx(this.pos.clone().setY(0.3), 1.6, 0xf5a04b);
+      } else if (slot === 'E') { // Tailwind dash
+        this.vel.copy(forward.multiplyScalar(18));
+        this.vel.y = 2;
       }
-      if (slot === 'Q') this.throwProjectile({ speed: 22, arc: 6, radius: 4.5, dmg: 80, color: 0xf5a04b });
-      if (slot === 'E') this.deployBoomBot();
-    } else if (id === 'yoru') {
-      if (slot === 'C') this.deployDecoy();
-      if (slot === 'Q') this.throwFlash();
-      if (slot === 'E') {
-        if (this.gateMarker) {
-          this.pos.copy(this.gateMarker.position).setY(PLAYER_HEIGHT);
-          this.scene.remove(this.gateMarker);
-          this.gateMarker = null;
-          this.spawnExplosionVfx(this.pos.clone().setY(0.3), 1.4, 0x7d8cff);
+    } else if (this.agent.id === 'raze') {
+      if (slot === 'C') { // Blast Pack
+        this.spawnProjectile('blastpack', pos, forward.multiplyScalar(12).add(new THREE.Vector3(0, 4, 0)));
+      } else if (slot === 'Q') { // Paint Shells
+        this.spawnProjectile('nade', pos, forward.multiplyScalar(16).add(new THREE.Vector3(0, 6, 0)));
+      } else if (slot === 'E') { // Boom Bot
+        this.spawnBoomBot(pos, forward);
+      }
+    } else if (this.agent.id === 'yoru') {
+      if (slot === 'C') { // Fakeout decoy
+        this.spawnDecoy(pos, forward);
+      } else if (slot === 'Q') { // Blindside flash
+        this.spawnProjectile('flash', pos, forward.multiplyScalar(22));
+      } else if (slot === 'E') { // Gatecrash teleport marker
+        if (!this.gateMarker) {
+          this.gateMarker = pos.clone();
+          this.announce('GATECRASH PLACED', false);
         } else {
-          const marker = new THREE.Mesh(
-            new THREE.TorusGeometry(0.5, 0.07, 8, 24),
-            new THREE.MeshBasicMaterial({ color: 0x7d8cff })
-          );
-          marker.position.copy(this.pos).setY(0.4);
-          marker.rotation.x = Math.PI / 2;
-          this.scene.add(marker);
-          this.gateMarker = marker;
-          return; // placing the tether costs no cooldown; teleporting does
+          this.pos.copy(this.gateMarker);
+          this.gateMarker = null;
+          this.sfx.play('boom');
         }
       }
-    } else if (id === 'brimstone') {
-      if (slot === 'C') this.zones.push({ pos: this.pos.clone().setY(0), r: 4, buff: 'stim', until: this.now() + 8, mesh: this.spawnZoneVfx(this.pos.clone().setY(0.05), 4, 0xf5b945) });
-      if (slot === 'Q') this.throwProjectile({ speed: 18, arc: 7, radius: 3.4, dmg: 0, molly: true, color: 0xe8744b });
-      if (slot === 'E') this.spawnSmoke(this.aimPoint(80).setY(1.6), 3.6, 7, 0xe8744b);
-    } else if (id === 'sova') {
-      if (slot === 'C') this.deployDrone();
-      if (slot === 'Q') this.throwProjectile({ speed: 30, arc: 2.5, radius: 3.4, dmg: 60, color: 0x6fd0f0 });
-      if (slot === 'E') {
-        this.reveal.until = this.now() + 6;
-        for (const b of this.bots) if (b.alive) b.setRevealed(true);
-        this.spawnExplosionVfx(this.aimPoint(80), 2, 0x6fd0f0);
-        this.cb.onAnnounce('ENEMIES REVEALED', false);
+    } else if (this.agent.id === 'brimstone') {
+      if (slot === 'C') { // Stim Beacon
+        this.spawnZone(pos, 8, 4.5, { buff: 'fireRate', val: 1.35 });
+      } else if (slot === 'Q') { // Incendiary molly
+        this.spawnProjectile('molly', pos, forward.multiplyScalar(15).add(new THREE.Vector3(0, 5, 0)));
+      } else if (slot === 'E') { // Sky Smoke anywhere
+        const hit = this.raycastGround();
+        if (hit) this.spawnSmoke(hit);
+      }
+    } else if (this.agent.id === 'sova') {
+      if (slot === 'C') { // Owl Drone
+        this.announce('DRONE DEPLOYED', false);
+      } else if (slot === 'Q') { // Shock Bolt
+        this.spawnProjectile('shock', pos, forward.multiplyScalar(20));
+      } else if (slot === 'E') { // Recon Bolt
+        this.spawnReconBolt(pos, forward.multiplyScalar(22));
       }
     }
   }
 
   castUlt() {
-    const id = this.agent.id;
-    if (id === 'jett') {
+    const t = this.now();
+    if (this.agent.id === 'jett') {
       this.preUltWeapon = this.weapon;
-      this.weapon = BLADE_STORM;
-      this.mag = Infinity;
-      this.ultActiveUntil = this.now() + 12;
-      this.cb.onAnnounce('BLADE STORM', true);
-    } else if (id === 'raze') {
-      this.throwProjectile({ speed: 34, arc: 0.5, radius: 8, dmg: 250, color: 0xff4655, big: true });
-      this.cb.onAnnounce('FIRE IN THE HOLE', true);
-    } else if (id === 'yoru') {
+      this.equip(BLADE_STORM);
+      this.ultActiveUntil = t + 12;
+    } else if (this.agent.id === 'raze') {
+      this.spawnProjectile('showstopper', this.camera.getWorldPosition(this._v1), this._v2.set(0, 0, -1).applyQuaternion(this.camera.quaternion).multiplyScalar(28), true);
+    } else if (this.agent.id === 'yoru') {
+      this.ultActiveUntil = t + 8;
       this.invisible = true;
-      this.ultActiveUntil = this.now() + 8;
       document.getElementById('ult-overlay').classList.add('yoru');
-      this.cb.onAnnounce('DIMENSIONAL DRIFT', true);
-    } else if (id === 'brimstone') {
-      const target = this.aimPoint(100).setY(0);
-      this.zones.push({ pos: target, r: 7, dps: 80, until: this.now() + 4, hostileToBots: true, mesh: this.spawnZoneVfx(target.clone().setY(0.06), 7, 0xff4655) });
-      const beam = new THREE.Mesh(
-        new THREE.CylinderGeometry(7, 7, 60, 24, 1, true),
-        new THREE.MeshBasicMaterial({ color: 0xff4655, transparent: true, opacity: 0.22, side: THREE.DoubleSide })
-      );
-      beam.position.copy(target).setY(30);
-      this.scene.add(beam);
-      this.effects.push({ mesh: beam, until: this.now() + 4 });
-      this.sfx.play('boom');
-      this.cb.onAnnounce('ORBITAL STRIKE', true);
-    } else if (id === 'sova') {
-      this.cb.onAnnounce("HUNTER'S FURY", true);
-      let shots = 0;
-      const fire = () => {
-        if (shots++ >= 3 || !this.running) return;
-        const origin = this.camera.getWorldPosition(new THREE.Vector3());
-        const dir = this.aimDir();
-        // wall-piercing: damage every bot near the beam line
-        for (const b of this.bots) {
-          if (!b.alive) continue;
-          const toBot = b.group.position.clone().setY(origin.y).sub(origin);
-          const along = toBot.dot(dir);
-          if (along < 0) continue;
-          const perp = toBot.sub(dir.clone().multiplyScalar(along)).length();
-          if (perp < 2.2 && b.damage(130)) this.onKill(b, false);
-        }
-        const beamEnd = origin.clone().add(dir.clone().multiplyScalar(90));
-        const geo = new THREE.BufferGeometry().setFromPoints([origin.clone().add(new THREE.Vector3(0, -0.1, 0)), beamEnd]);
-        const line = new THREE.Line(geo, new THREE.LineBasicMaterial({ color: 0x6fd0f0, linewidth: 3 }));
-        this.scene.add(line);
-        this.effects.push({ mesh: line, until: this.now() + 0.4 });
-        this.sfx.play('boom');
-        if (shots < 3) setTimeout(fire, 700);
-      };
-      fire();
+    } else if (this.agent.id === 'brimstone') {
+      const hit = this.raycastGround();
+      if (hit) this.spawnZone(hit, 7, 5, { dps: 45, hostile: true });
+    } else if (this.agent.id === 'sova') {
+      for (let i = 0; i < 3; i++) {
+        setTimeout(() => { if (this.running) this.fireHunterFury(); }, i * 350);
+      }
     }
   }
 
-  moveInputDir() {
-    const f = (this.keys.KeyW ? 1 : 0) - (this.keys.KeyS ? 1 : 0);
-    const s = (this.keys.KeyD ? 1 : 0) - (this.keys.KeyA ? 1 : 0);
-    if (!f && !s) return new THREE.Vector3();
-    const sin = Math.sin(this.yaw), cos = Math.cos(this.yaw);
-    return new THREE.Vector3(-sin * f + cos * s, 0, -cos * f - sin * s).normalize();
-  }
-
-  flatAimDir() {
-    const d = this.aimDir(); d.y = 0;
-    return d.lengthSq() > 0 ? d.normalize() : new THREE.Vector3(0, 0, -1);
-  }
-
-  spawnSmoke(point, radius, duration, color) {
-    const m = new THREE.Mesh(
-      new THREE.SphereGeometry(radius, 20, 20),
-      new THREE.MeshStandardMaterial({ color, transparent: true, opacity: 0.82, roughness: 1, depthWrite: false })
-    );
-    m.position.copy(point).setY(Math.max(point.y, radius * 0.55));
-    this.scene.add(m);
-    this.effects.push({ mesh: m, until: this.now() + duration, smoke: true });
-  }
-
-  spawnZoneVfx(point, radius, color) {
-    const m = new THREE.Mesh(
-      new THREE.CylinderGeometry(radius, radius, 0.5, 28, 1, true),
-      new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.35, side: THREE.DoubleSide })
-    );
-    m.position.copy(point).setY(0.25);
-    this.scene.add(m);
-    return m;
-  }
-
-  spawnExplosionVfx(point, radius, color) {
-    const m = new THREE.Mesh(
-      new THREE.SphereGeometry(radius, 14, 14),
-      new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.7 })
-    );
-    m.position.copy(point);
-    this.scene.add(m);
-    this.effects.push({ mesh: m, until: this.now() + 0.35, grow: true });
-  }
-
-  throwProjectile({ speed, arc, radius, dmg, color, molly = false, big = false }) {
-    const m = new THREE.Mesh(
-      new THREE.SphereGeometry(big ? 0.3 : 0.16, 10, 10),
-      new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 1.2 })
-    );
-    m.position.copy(this.camera.getWorldPosition(new THREE.Vector3())).add(this.aimDir().multiplyScalar(0.6));
-    this.scene.add(m);
-    const vel = this.aimDir().multiplyScalar(speed);
-    vel.y += arc;
-    this.projectiles.push({ mesh: m, vel, radius, dmg, molly, color });
-  }
-
-  deployBoomBot() {
-    const m = new THREE.Mesh(
-      new THREE.SphereGeometry(0.32, 12, 12),
-      new THREE.MeshStandardMaterial({ color: 0xf5a04b, emissive: 0xf5a04b, emissiveIntensity: 1 })
-    );
-    m.position.copy(this.pos).setY(0.32).add(this.flatAimDir().multiplyScalar(1));
-    this.scene.add(m);
-    this.projectiles.push({ mesh: m, vel: this.flatAimDir().multiplyScalar(7), radius: 4, dmg: 110, ground: true, color: 0xf5a04b, fuse: this.now() + 6 });
-  }
-
-  deployDecoy() {
-    let m = null, mixer = null;
-    // Use the agent's own glTF body as the decoy when available.
-    const c = this.models ? this.models.character() : null;
-    if (c && c.model) {
-      const model = c.model;
-      const h = new THREE.Box3().setFromObject(model).getSize(new THREE.Vector3()).y || 1.7;
-      model.scale.setScalar(1.6 / h);
-      model.position.y -= new THREE.Box3().setFromObject(model).min.y;
-      model.traverse((o) => { if (o.isMesh) { o.material.emissive = new THREE.Color(0x3b4bd8); o.material.emissiveIntensity = 0.8; o.frustumCulled = false; } });
-      m = new THREE.Group();
-      m.rotation.y = BOT_MODEL_YAW;
-      m.add(model);
-      const idle = c.animations.find((a) => a.name === CLIPS.idle);
-      if (idle) { mixer = new THREE.AnimationMixer(model); mixer.clipAction(idle).play(); this.mixers.push(mixer); }
-    }
-    if (!m) {
-      const mat = new THREE.MeshStandardMaterial({ color: 0x7d8cff, transparent: true, opacity: 0.75, emissive: 0x3b4bd8, emissiveIntensity: 0.6 });
-      m = new THREE.Mesh(new THREE.CapsuleGeometry(0.38, 0.85, 4, 10), mat);
-    }
-    const base = this.pos.clone().add(this.flatAimDir().multiplyScalar(1.2));
-    m.position.set(base.x, mixer ? 0 : 0.85, base.z);
-    this.scene.add(m);
-    this.effects.push({ mesh: m, until: this.now() + 6, decoy: true, mixer, vel: this.flatAimDir().multiplyScalar(3) });
-  }
-
-  deployDrone() {
-    const m = new THREE.Mesh(
-      new THREE.OctahedronGeometry(0.3),
-      new THREE.MeshStandardMaterial({ color: 0x6fd0f0, emissive: 0x6fd0f0, emissiveIntensity: 1.2 })
-    );
-    m.position.copy(this.pos).setY(2.2);
-    this.scene.add(m);
-    this.effects.push({ mesh: m, until: this.now() + 5, drone: true, vel: this.flatAimDir().multiplyScalar(6) });
-  }
-
-  throwFlash() {
-    const point = this.aimPoint(20);
-    this.spawnExplosionVfx(point, 1, 0xffffff);
+  fireHunterFury() {
+    this.sfx.play('shot', { type: 'ULT' });
+    this.addShake(0.04, 0.2);
     for (const b of this.bots) {
-      if (b.alive && b.group.position.distanceTo(point) < 14) b.flashUntil = this.now() + 3.2;
+      if (b.alive) {
+        b.damage(80);
+        if (!b.alive) this.onKill(b, false);
+      }
     }
-    this.cb.onAnnounce('ENEMIES BLINDED', false);
   }
 
-  // ---------------- damage to player
-  hurt(amount, fromDir) {
-    if (this.dead || this.invisible) return;
-    // armor absorbs 66% of its share
-    const absorbed = Math.min(this.armor, Math.round(amount * 0.5));
-    this.armor -= absorbed;
-    this.hp -= (amount - absorbed);
-    const v = document.getElementById('damage-vignette');
-    v.style.opacity = 1;
-    clearTimeout(this._vt);
-    this._vt = setTimeout(() => (v.style.opacity = 0), 280);
-    this.addShake(Math.min(0.06 + amount * 0.004, 0.16), 0.3);
-    if (this.hp <= 0) this.die();
-    this.updateHud();
+  raycastGround() {
+    const dir = this._v1.set(0, 0, -1).applyQuaternion(this.camera.quaternion);
+    this.raycaster.set(this.camera.getWorldPosition(this._v2), dir);
+    const hits = this.raycaster.intersectObjects(this.shootables, false);
+    return hits[0] ? hits[0].point : null;
   }
 
-  die() {
-    this.dead = true;
-    this.deaths++;
-    this.killStreak = 0;
-    this.deadUntil = this.now() + RESPAWN_DELAY;
-    document.getElementById('death-screen').classList.remove('hidden');
-    document.exitPointerLock();
-    const killer = this.bots[Math.floor(Math.random() * this.bots.length)];
-    this.cb.onKillFeed(killer.name, 'YOU', false, true);
-    this.cb.onScore(this.kills, this.deaths);
+  spawnSmoke(pos) {
+    const m = new THREE.Mesh(
+      new THREE.SphereGeometry(3.2, 12, 12),
+      new THREE.MeshStandardMaterial({ color: 0x94a3b8, transparent: true, opacity: 0.85, roughness: 1 })
+    );
+    m.position.copy(pos);
+    this.scene.add(m);
+    this.effects.push({ mesh: m, until: this.now() + 8 });
   }
 
-  respawnPlayer() {
-    this.dead = false;
-    this.hp = 100; this.armor = 50;
-    this.pos.copy(this.randomSpawn()).setY(PLAYER_HEIGHT);
-    this.vel.set(0, 0, 0);
-    document.getElementById('death-screen').classList.add('hidden');
-    if (this.weapon.id !== 'classic') this.equip(getWeapon('classic')); // drop your gun on death
-    this.lock();
-    this.updateHud();
+  spawnZone(pos, radius, duration, opts) {
+    const m = new THREE.Mesh(
+      new THREE.RingGeometry(radius * 0.9, radius, 24),
+      new THREE.MeshBasicMaterial({ color: opts.hostile ? 0xff3848 : 0x00f5ff, side: THREE.DoubleSide, transparent: true, opacity: 0.75 })
+    );
+    m.rotation.x = -Math.PI / 2;
+    m.position.copy(pos).y = 0.05;
+    this.scene.add(m);
+    this.zones.push({ pos: pos.clone(), r: radius, ...opts, until: this.now() + duration });
+    this.effects.push({ mesh: m, until: this.now() + duration });
   }
 
-  // ---------------- per-frame
+  spawnProjectile(type, pos, vel, direct = false) {
+    const m = new THREE.Mesh(
+      new THREE.SphereGeometry(0.18, 8, 8),
+      new THREE.MeshBasicMaterial({ color: 0xfff5ea })
+    );
+    m.position.copy(pos);
+    this.scene.add(m);
+    this.projectiles.push({ type, mesh: m, vel: vel.clone(), pos: pos.clone(), direct, until: this.now() + 4 });
+  }
+
+  spawnBoomBot(pos, fwd) {
+    const m = new THREE.Mesh(
+      new THREE.BoxGeometry(0.5, 0.3, 0.7),
+      new THREE.MeshStandardMaterial({ color: 0xff3848, roughness: 0.3 })
+    );
+    m.position.copy(pos).y = 0.15;
+    this.scene.add(m);
+    this.projectiles.push({ type: 'boombot', mesh: m, vel: fwd.multiplyScalar(6), pos: m.position, until: this.now() + 5 });
+  }
+
+  spawnDecoy(pos, fwd) {
+    const asset = this.models ? this.models.character() : null;
+    if (!asset) return;
+    const m = asset.model;
+    m.position.copy(pos);
+    this.scene.add(m);
+    const mixer = new THREE.AnimationMixer(m);
+    const clip = asset.animations.find((a) => a.name === CLIPS.run);
+    if (clip) mixer.clipAction(clip).play();
+    this.mixers.push(mixer);
+    this.projectiles.push({ type: 'decoy', mesh: m, mixer, vel: fwd.multiplyScalar(5), pos: m.position, until: this.now() + 4 });
+  }
+
+  spawnReconBolt(pos, vel) {
+    const m = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.04, 0.04, 0.4, 6),
+      new THREE.MeshBasicMaterial({ color: 0x00f5ff })
+    );
+    m.position.copy(pos);
+    this.scene.add(m);
+    this.projectiles.push({ type: 'recon', mesh: m, vel: vel.clone(), pos: pos.clone(), until: this.now() + 6 });
+  }
+
+  addShake(pow, dur) {
+    if (settings.reducedMotion) return;
+    this.shake.power = Math.max(this.shake.power, pow);
+    this.shake.dur = dur;
+    this.shake.until = this.now() + dur;
+  }
+
+  updateHud() {
+    document.getElementById('hp-num').textContent = Math.max(0, Math.round(this.hp));
+    const hpPct = Math.max(0, this.hp) / 100;
+    const hpFill = document.getElementById('hp-fill');
+    hpFill.style.width = `${hpPct * 100}%`;
+    hpFill.classList.toggle('low', this.hp <= 30);
+    document.getElementById('armor-fill').style.width = `${(this.armor / 50) * 100}%`;
+    document.getElementById('weapon-name').textContent = this.weapon.name;
+    document.getElementById('ammo-mag').textContent = this.mag;
+    document.getElementById('ammo-reserve').textContent = this.weapon.mag === Infinity ? '/ ∞' : '/ 🡞';
+    this.cb.onMoney(this.money, this.weapon.id);
+  }
+
+  announce(txt, red) {
+    const el = document.getElementById('announce');
+    el.textContent = txt;
+    el.classList.remove('show', 'red');
+    void el.offsetWidth;
+    el.classList.add('show');
+    if (red) el.classList.add('red');
+  }
+
+  // ---------------- loop / physics / AI
   loop() {
     if (!this.running) return;
     requestAnimationFrame(() => this.loop());
-    const dt = Math.min(this.clock.getDelta(), 0.05);
+
+    const dt = Math.min(this.clock.getDelta(), 0.1);
     const t = this.now();
 
-    if (!this.paused) {
-      if (this.dead) {
-        if (t >= this.deadUntil) this.respawnPlayer();
-      } else {
-        this.updatePlayer(dt, t);
-        this.updateBots(dt, t);
-      }
-      this.updateProjectiles(dt, t);
-      this.updateEffects(dt, t);
-      this.updateZones(dt, t);
-      this.updateUltState(t);
-      this.updateAbilityCharges(t);
+    if (this.mixers.length) {
       for (let i = 0; i < this.mixers.length; i++) this.mixers[i].update(dt);
-      if (this.mouseDown && this.weapon.auto) this.tryShoot();
-      if (this.reloading && t >= this.reloadEnd) { this.reloading = false; this.mag = this.weapon.mag; this.updateHud(); }
     }
 
-    // camera
-    this.camera.position.copy(this.pos);
-    this.camera.quaternion.setFromEuler(new THREE.Euler(this.pitch + this.recoilKick, this.yaw, 0, 'YXZ'));
-    // screen shake — camera-local jitter that decays over its duration
-    if (!settings.reducedMotion && t < this.shake.until) {
-      const k = this.shake.power * (this.shake.until - t) / this.shake.dur;
-      this.camera.translateX((Math.random() - 0.5) * k);
-      this.camera.translateY((Math.random() - 0.5) * k);
-    }
-    this.recoilKick = Math.max(0, this.recoilKick - dt * 0.35);
-    this.muzzle.intensity = Math.max(0, this.muzzle.intensity - dt * 160);
-    this.vmZ += (-0.45 - this.vmZ) * dt * 14;
-    // subtle weapon bob
-    const speed2d = Math.hypot(this.vel.x, this.vel.z);
-    this._bob = (this._bob || 0) + dt * speed2d * 1.6;
-    const bobY = Math.sin(this._bob) * 0.006 * Math.min(speed2d, 6);
-    this.viewmodel.position.set(0.26, -0.22 + bobY, this.vmZ);
-    this.viewmodel.visible = !this.dead;
-
-    this.renderer.render(this.scene, this.camera);
-    this.renderer.clearDepth();
-    this.renderer.autoClear = false;
-    this.renderer.render(this.vmScene, this.vmCamera);
-    this.renderer.autoClear = true;
-
-    if (settings.showFps) this.tickFps(dt);
-  }
-
-  // Screen-shake request — keeps the strongest active shake.
-  addShake(power, dur = 0.32) {
-    if (settings.reducedMotion) return;
-    const t = this.now();
-    if (t < this.shake.until && this.shake.power > power) return;
-    this.shake = { until: t + dur, power, dur };
-  }
-
-  tickFps(dt) {
-    this._fpsAcc = (this._fpsAcc || 0) + dt;
-    this._fpsFrames = (this._fpsFrames || 0) + 1;
-    if (this._fpsAcc >= 0.5) {
-      const el = document.getElementById('fps-meter');
-      if (el) el.textContent = `${Math.round(this._fpsFrames / this._fpsAcc)} FPS`;
-      this._fpsAcc = 0; this._fpsFrames = 0;
-    }
-  }
-
-  updatePlayer(dt, t) {
-    const walk = this.keys.ShiftLeft || this.keys.ShiftRight;
-    const speed = walk ? 3.1 : 6.2;
-    const move = this.moveInputDir();
-    const dashing = this.dashUntil && t < this.dashUntil;
-
-    if (!dashing) {
-      const accel = this.onGround ? 60 : 14;
-      this.vel.x += (move.x * speed - this.vel.x) * Math.min(accel * dt / 6, 1) * (this.onGround ? 1 : 0.4);
-      this.vel.z += (move.z * speed - this.vel.z) * Math.min(accel * dt / 6, 1) * (this.onGround ? 1 : 0.4);
-      if (this.onGround && move.lengthSq() === 0) { this.vel.x *= Math.pow(0.0001, dt); this.vel.z *= Math.pow(0.0001, dt); }
-    }
-
-    if (this.keys.Space && this.onGround) { this.vel.y = 7.4; this.onGround = false; }
-    this.vel.y -= GRAVITY * dt;
-
-    // integrate + collide per axis
-    const next = this.pos.clone();
-    next.x += this.vel.x * dt;
-    if (this.collides(next)) { next.x = this.pos.x; this.vel.x = 0; }
-    next.z += this.vel.z * dt;
-    if (this.collides(next)) { next.z = this.pos.z; this.vel.z = 0; }
-    next.y += this.vel.y * dt;
-    if (next.y < PLAYER_HEIGHT) { next.y = PLAYER_HEIGHT; this.vel.y = 0; this.onGround = true; }
-    else if (this.collides(next)) {
-      // landed on top of a box or bumped a ceiling edge
-      if (this.vel.y < 0) { this.onGround = true; }
-      next.y = this.pos.y; this.vel.y = 0;
-    } else {
-      this.onGround = next.y <= PLAYER_HEIGHT + 0.001;
-    }
-    this.pos.copy(next);
-
-    // hard map bounds
-    this.pos.x = Math.max(-28.6, Math.min(28.6, this.pos.x));
-    this.pos.z = Math.max(-28.6, Math.min(28.6, this.pos.z));
-  }
-
-  collides(p) {
-    const me = this._collBox;
-    me.min.set(p.x - PLAYER_RADIUS, p.y - PLAYER_HEIGHT, p.z - PLAYER_RADIUS);
-    me.max.set(p.x + PLAYER_RADIUS, p.y + 0.1, p.z + PLAYER_RADIUS);
-    return this.colliders.some((c) => c.intersectsBox(me));
-  }
-
-  updateBots(dt, t) {
-    // decoys attract bot aim
-    const decoys = this.effects.filter((e) => e.decoy).map((e) => e.mesh.position);
-
-    for (const b of this.bots) {
-      if (!b.alive) {
-        if (b.mixer && b.hideAt && t > b.hideAt) b.group.visible = false;
-        if (t >= b.respawnAt) b.respawn(this.randomSpawn());
-        continue;
-      }
-      if (this.reveal.until < t) b.setRevealed(false);
-
-      const flashed = b.flashUntil > t;
-      const playerVisible = !this.invisible && !flashed && this.hasLineOfSight(b);
-      const target = decoys.length && !playerVisible ? decoys[0] : this.pos;
-      const toTarget = target.clone().setY(0).sub(b.group.position.clone().setY(0));
-      const dist = toTarget.length();
-
-      if (playerVisible && dist < 30) {
-        // face & strafe-approach
-        b.group.lookAt(this.pos.x, b.group.position.y, this.pos.z);
-        if (dist > 9) { b.group.position.add(toTarget.normalize().multiplyScalar(b.speed * dt)); b.playAction('run'); }
-        else b.playAction('idle');
-        b.shootCooldown -= dt;
-        if (b.shootCooldown <= 0 && dist < 26) {
-          b.shootCooldown = 0.55 + Math.random() * 0.7;
-          this.sfx.play('botshot');
-          // accuracy falls off with distance and player speed
-          const hitChance = Math.max(0.12, 0.55 - dist * 0.012 - Math.hypot(this.vel.x, this.vel.z) * 0.03);
-          if (Math.random() < hitChance) this.hurt(8 + Math.floor(Math.random() * 12));
-        }
-      } else {
-        // wander between random points
-        if (!b.wanderTarget || b.group.position.distanceTo(b.wanderTarget) < 1.5) {
-          b.wanderTarget = this.randomSpawn();
-        }
-        const dir = b.wanderTarget.clone().setY(0).sub(b.group.position.clone().setY(0)).normalize();
-        b.group.position.add(dir.multiplyScalar(b.speed * 0.55 * dt));
-        b.group.lookAt(b.wanderTarget.x, b.group.position.y, b.wanderTarget.z);
-        b.playAction('run');
-      }
-
-      // keep inside arena
-      b.group.position.x = Math.max(-28, Math.min(28, b.group.position.x));
-      b.group.position.z = Math.max(-28, Math.min(28, b.group.position.z));
-    }
-  }
-
-  hasLineOfSight(bot) {
-    const from = this._v1.copy(bot.group.position); from.y = 1.5;
-    const dir = this._v2.copy(this.pos).sub(from);
-    const dist = dir.length();
-    dir.normalize();
-    this.raycaster.set(from, dir);
-    this.raycaster.near = 0; this.raycaster.far = dist;
-    // blocked by walls/crates (precomputed, floor excluded) or active smokes
-    const targets = this._losTargets; targets.length = 0;
-    for (let i = 0; i < this.wallBlockers.length; i++) targets.push(this.wallBlockers[i]);
-    for (const e of this.effects) if (e.smoke) targets.push(e.mesh);
-    return this.raycaster.intersectObjects(targets, false).length === 0;
-  }
-
-  updateProjectiles(dt, t) {
-    for (let i = this.projectiles.length - 1; i >= 0; i--) {
-      const p = this.projectiles[i];
-      if (p.ground) {
-        // boombot: roll forward, hunt nearby bots, explode on contact or fuse
-        p.mesh.position.add(p.vel.clone().multiplyScalar(dt));
-        p.mesh.rotation.x += dt * 8;
-        const prey = this.bots.find((b) => b.alive && b.group.position.distanceTo(p.mesh.position) < 6);
-        if (prey) {
-          const d = prey.group.position.clone().sub(p.mesh.position).setY(0).normalize();
-          p.vel.lerp(d.multiplyScalar(7), 0.12);
-        }
-        const boom = (prey && prey.group.position.distanceTo(p.mesh.position) < 1.2) || t > p.fuse
-          || Math.abs(p.mesh.position.x) > 28 || Math.abs(p.mesh.position.z) > 28;
-        if (boom) { this.explode(p); this.projectiles.splice(i, 1); }
-        continue;
-      }
-      p.vel.y -= GRAVITY * 0.55 * dt;
-      p.mesh.position.add(p.vel.clone().multiplyScalar(dt));
-      if (p.mesh.position.y <= 0.15 || this.pointInWall(p.mesh.position)) {
-        this.explode(p);
-        this.projectiles.splice(i, 1);
+    // ability cooldown updates
+    for (const slot of ['C', 'Q', 'E']) {
+      const st = this.abilityState[slot];
+      while (st.pending.length && st.pending[0] <= t) {
+        st.pending.shift();
+        st.count = Math.min(st.count + 1, st.max);
       }
     }
-  }
 
-  pointInWall(point) {
-    return this.colliders.some((c) => c.containsPoint(point));
-  }
-
-  explode(p) {
-    this.sfx.play('boom');
-    this.spawnExplosionVfx(p.mesh.position.clone(), p.radius * 0.6, p.color);
-    const pd = this.pos.distanceTo(p.mesh.position);
-    if (pd < 18) this.addShake(Math.min(0.22, (1 - pd / 18) * 0.26), 0.45);
-    this.scene.remove(p.mesh);
-    if (p.molly) {
-      this.zones.push({ pos: p.mesh.position.clone().setY(0), r: p.radius, dps: 30, until: this.now() + 5, hostileToBots: true, mesh: this.spawnZoneVfx(p.mesh.position.clone().setY(0.06), p.radius, 0xe8744b) });
-      return;
-    }
-    for (const b of this.bots) {
-      if (!b.alive) continue;
-      const d = b.group.position.distanceTo(p.mesh.position);
-      if (d < p.radius) {
-        const dmg = Math.round(p.dmg * (1 - d / p.radius * 0.6));
-        if (b.damage(dmg)) this.onKill(b, false);
+    // Ult / invisibility timers
+    if (this.ultActiveUntil && t > this.ultActiveUntil) {
+      if (this.agent.id === 'jett' && this.weapon === BLADE_STORM) {
+        this.equip(this.preUltWeapon || getWeapon('classic'));
       }
-    }
-    // self-damage knockback only, no damage (it's a power fantasy build)
-  }
-
-  updateEffects(dt, t) {
-    for (let i = this.effects.length - 1; i >= 0; i--) {
-      const e = this.effects[i];
-      if (e.grow) e.mesh.scale.addScalar(dt * 4);
-      if (e.grow && e.mesh.material && e.mesh.material.transparent) e.mesh.material.opacity = Math.max(0, e.mesh.material.opacity - dt * 2);
-      if (e.decoy && e.vel) { e.mesh.position.add(e.vel.clone().multiplyScalar(dt)); e.vel.multiplyScalar(0.98); }
-      if (e.drone && e.vel) {
-        e.mesh.position.add(e.vel.clone().multiplyScalar(dt));
-        e.mesh.rotation.y += dt * 6;
-        for (const b of this.bots) {
-          if (b.alive && b.group.position.distanceTo(e.mesh.position) < 8) b.setRevealed(true);
-        }
-      }
-      if (t >= e.until) {
-        if (e.drone) for (const b of this.bots) { if (this.reveal.until < t) b.setRevealed(false); }
-        if (e.mixer) { const mi = this.mixers.indexOf(e.mixer); if (mi >= 0) this.mixers.splice(mi, 1); }
-        if (e.pool) { e.mesh.visible = false; e.pool.push(e.mesh); } // return to pool, keep in scene
-        else this.scene.remove(e.mesh);
-        this.effects.splice(i, 1);
-      }
-    }
-  }
-
-  updateZones(dt, t) {
-    this.fireRateMult = 1;
-    for (let i = this.zones.length - 1; i >= 0; i--) {
-      const z = this.zones[i];
-      if (t >= z.until) {
-        if (z.mesh) this.scene.remove(z.mesh);
-        this.zones.splice(i, 1);
-        continue;
-      }
-      if (z.buff === 'stim' && this.pos.clone().setY(0).distanceTo(z.pos) < z.r) this.fireRateMult = 1.8;
-      if (z.dps && z.hostileToBots) {
-        for (const b of this.bots) {
-          if (b.alive && b.group.position.clone().setY(0).distanceTo(z.pos) < z.r) {
-            if (b.damage(z.dps * dt)) this.onKill(b, false);
-          }
-        }
-      }
-    }
-  }
-
-  updateUltState(t) {
-    if (this.ultActiveUntil && t >= this.ultActiveUntil) {
-      this.ultActiveUntil = 0;
-      if (this.weapon === BLADE_STORM) {
-        this.weapon = this.preUltWeapon || getWeapon('classic');
-        this.mag = this.weapon.mag;
-      }
-      if (this.invisible) {
+      if (this.agent.id === 'yoru') {
         this.invisible = false;
         document.getElementById('ult-overlay').classList.remove('yoru');
       }
+      this.ultActiveUntil = 0;
+    }
+
+    // Reload timer
+    if (this.reloading && t >= this.reloadEnd) {
+      this.reloading = false;
+      this.mag = this.weapon.mag;
       this.updateHud();
     }
-  }
 
-  // ---------------- HUD
-  announce(text, red) { this.cb.onAnnounce(text, red); }
+    // Player Movement Physics
+    if (!this.paused && !this.dead && this.locked()) {
+      const speed = this.keys['ShiftLeft'] ? 3.6 : 6.4;
+      const fwd = (this.keys['KeyW'] ? 1 : 0) - (this.keys['KeyS'] ? 1 : 0);
+      const side = (this.keys['KeyD'] ? 1 : 0) - (this.keys['KeyA'] ? 1 : 0);
 
-  updateHud() {
-    document.getElementById('hp-num').textContent = Math.max(0, Math.ceil(this.hp));
-    const fill = document.getElementById('hp-fill');
-    fill.style.width = `${Math.max(0, this.hp)}%`;
-    fill.classList.toggle('low', this.hp <= 35);
-    document.getElementById('armor-fill').style.width = `${Math.max(0, this.armor) * 2}%`;
-    document.getElementById('weapon-name').textContent = this.weapon.name;
-    document.getElementById('ammo-mag').textContent = this.weapon === BLADE_STORM ? '∞' : this.mag;
-    this.cb.onAbilityHud(this.abilityState, this.ultPoints, this.now());
-    this.cb.onMoney?.(this.money, this.weapon.id);
+      const moveDir = this._v1.set(side, 0, fwd).normalize().applyAxisAngle(new THREE.Vector3(0, 1, 0), this.yaw);
+      this.vel.x = moveDir.x * speed;
+      this.vel.z = moveDir.z * speed;
+
+      if (this.keys['Space'] && this.onGround) {
+        this.vel.y = 7.5;
+        this.onGround = false;
+      }
+      this.vel.y -= GRAVITY * dt;
+
+      this.pos.addScaledVector(this.vel, dt);
+
+      // Floor collision
+      if (this.pos.y <= PLAYER_HEIGHT) {
+        this.pos.y = PLAYER_HEIGHT;
+        this.vel.y = 0;
+        this.onGround = true;
+      }
+
+      // AABB Colliders with obstacles
+      this._collBox.makeCentered(this.pos, new THREE.Vector3(PLAYER_RADIUS * 2, PLAYER_HEIGHT * 2, PLAYER_RADIUS * 2));
+      for (const box of this.colliders) {
+        if (box.intersectsBox(this._collBox)) {
+          this.pos.x -= this.vel.x * dt * 1.2;
+          this.pos.z -= this.vel.z * dt * 1.2;
+        }
+      }
+    }
+
+    this.camera.position.copy(this.pos);
+    this.camera.quaternion.setFromEuler(new THREE.Euler(this.pitch, this.yaw, 0, 'YXZ'));
+
+    // Recoil recovery
+    this.recoilKick = Math.max(0, this.recoilKick - dt * 0.12);
+    this.muzzle.intensity = Math.max(0, this.muzzle.intensity - dt * 60);
+
+    // Viewmodel bob & sway
+    if (this.vmCamera) {
+      this.vmZ += (-0.45 - this.vmZ) * 0.1;
+      this.viewmodel.position.set(0.26, -0.22 + Math.sin(t * 12) * (this.vel.lengthSq() > 2 ? 0.008 : 0.002), this.vmZ);
+      this.renderer.clear();
+      this.renderer.render(this.scene, this.camera);
+      this.renderer.clearDepth();
+      this.renderer.render(this.vmScene, this.vmCamera);
+    } else {
+      this.renderer.render(this.scene, this.camera);
+    }
+
+    // Screen Shake
+    if (t < this.shake.until && !settings.reducedMotion) {
+      this.camera.position.add(new THREE.Vector3((Math.random()-0.5)*this.shake.power, (Math.random()-0.5)*this.shake.power, 0));
+    }
+
+    // Effect cleanup
+    for (let i = this.effects.length - 1; i >= 0; i--) {
+      const fx = this.effects[i];
+      if (t >= fx.until) {
+        fx.mesh.visible = false;
+        if (fx.pool) fx.pool.push(fx.mesh);
+        else this.scene.remove(fx.mesh);
+        this.effects.splice(i, 1);
+      }
+    }
+
+    // Projectile updates
+    for (let i = this.projectiles.length - 1; i >= 0; i--) {
+      const p = this.projectiles[i];
+      p.pos.addScaledVector(p.vel, dt);
+      p.mesh.position.copy(p.pos);
+      if (t >= p.until || p.pos.y <= 0) {
+        if (p.type === 'nade' || p.type === 'molly' || p.type === 'shock' || p.type === 'blastpack' || p.type === 'showstopper') {
+          this.sfx.play('boom');
+          this.spawnZone(p.pos, 4.5, 2.5, { dps: 30, hostile: true });
+        }
+        this.scene.remove(p.mesh);
+        this.projectiles.splice(i, 1);
+      }
+    }
+
+    // Bot AI Loop
+    for (const bot of this.bots) {
+      if (!bot.alive) {
+        if (t >= bot.respawnAt) {
+          bot.respawn(this.randomSpawn());
+        } else if (bot.hideAt && t >= bot.hideAt) {
+          bot.group.visible = false;
+          bot.hideAt = 0;
+        }
+        continue;
+      }
+
+      const dist = bot.group.position.distanceTo(this.pos);
+      if (dist < 22 && !this.invisible) {
+        bot.group.lookAt(this.pos.x, bot.group.position.y, this.pos.z);
+        if (bot.mixer) bot.playAction('run');
+        
+        const dir = this._v1.subVectors(this.pos, bot.group.position).normalize();
+        bot.group.position.addScaledVector(dir, bot.speed * dt);
+
+        if (dist < 16 && t >= bot.shootCooldown) {
+          bot.shootCooldown = t + 0.9 + Math.random() * 0.8;
+          this.sfx.play('botshot');
+          if (Math.random() < 0.65) {
+            this.hp -= 18;
+            this.addShake(0.04, 0.15);
+            this.updateHud();
+            if (this.hp <= 0 && !this.dead) {
+              this.dead = true;
+              this.deaths++;
+              document.getElementById('death-screen').classList.remove('hidden');
+              document.exitPointerLock();
+              setTimeout(() => {
+                this.hp = 100;
+                this.dead = false;
+                this.pos.copy(this.randomSpawn());
+                document.getElementById('death-screen').classList.add('hidden');
+                this.lock();
+                this.updateHud();
+              }, RESPAWN_DELAY * 1000);
+            }
+          }
+        }
+      } else {
+        if (bot.mixer) bot.playAction('idle');
+      }
+    }
   }
 }
