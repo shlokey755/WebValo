@@ -1,4 +1,4 @@
-// WebValo engine — Three.js first-person shooter (Optimized)
+// WebValo engine — Three.js first-person shooter (Fully Fixed & Optimized)
 import * as THREE from 'three';
 import { getWeapon, BLADE_STORM } from './weapons.js';
 import { CLIPS } from './models.js';
@@ -181,7 +181,7 @@ function buildMap(scene) {
   const sun = new THREE.DirectionalLight(0xfff6ea, 4.0);
   sun.position.set(25, 35, 15);
   sun.castShadow = true;
-  sun.shadow.mapSize.set(1024, 1024); // Optimized shadow map resolution for stable 60fps
+  sun.shadow.mapSize.set(1024, 1024);
   sun.shadow.camera.left = -40; sun.shadow.camera.right = 40;
   sun.shadow.camera.top = 40; sun.shadow.camera.bottom = -40;
   scene.add(sun);
@@ -206,7 +206,7 @@ function buildMap(scene) {
 
 const BOT_NAMES = ['REYNA-BOT', 'PHX-UNIT', 'OMEN-77', 'CYPHER.EXE', 'KAYO-MK2', 'VIPER-X', 'SAGE-9000'];
 const BOT_MODEL_YAW = 0;
-const BOT_MODEL_H = 1.45;
+const BOT_MODEL_H = 1.75; // Proportional realistic height matching player view
 
 class Bot {
   constructor(scene, spawn, name, asset = null) {
@@ -223,21 +223,25 @@ class Bot {
     const headMat = new THREE.MeshStandardMaterial({ color: 0xffe8e1, roughness: 0.3, emissive: 0xff3848, emissiveIntensity: 0.4 });
 
     this.group = new THREE.Group();
-    const H = BOT_MODEL_H;
-    const bodyR = hasModel ? 0.235 * H : 0.38, bodyCyl = hasModel ? 0.31 * H : 0.85, bodyY = hasModel ? 0.31 * H : 0.85;
-    const headR = hasModel ? 0.30 * H : 0.24, headY = hasModel ? 0.70 * H : 1.62;
-    this.body = new THREE.Mesh(new THREE.CapsuleGeometry(bodyR, bodyCyl, 4, 10), bodyMat);
-    this.body.position.y = bodyY;
+    
+    // Clean proportional fallback hitboxes matching 1.75m height
+    this.body = new THREE.Mesh(new THREE.CapsuleGeometry(0.32, 0.9, 4, 10), bodyMat);
+    this.body.position.y = 0.85;
     this.body.castShadow = true;
-    this.head = new THREE.Mesh(new THREE.SphereGeometry(headR, 12, 12), headMat);
-    this.head.position.y = headY;
+
+    this.head = new THREE.Mesh(new THREE.SphereGeometry(0.22, 12, 12), headMat);
+    this.head.position.y = 1.55;
     this.head.castShadow = true;
+
     this.visor = new THREE.Mesh(
-      new THREE.BoxGeometry(0.34, 0.07, 0.1),
+      new THREE.BoxGeometry(0.28, 0.06, 0.1),
       new THREE.MeshStandardMaterial({ color: 0x00f5ff, emissive: 0x00f5ff, emissiveIntensity: 1.6 })
     );
-    this.visor.position.set(0, 1.64, 0.2);
+    this.visor.position.set(0, 1.56, 0.18);
+
     this.group.add(this.body, this.head, this.visor);
+    
+    // Tag fallbacks for raycasting
     this.body.userData.bot = this; this.body.userData.part = 'body';
     this.head.userData.bot = this; this.head.userData.part = 'head';
     this.group.position.copy(spawn);
@@ -246,17 +250,32 @@ class Bot {
     this.actions = {};
     this.current = null;
     this.skinMeshes = [];
+
     if (hasModel) {
       const m = asset.model;
       const h = new THREE.Box3().setFromObject(m).getSize(new THREE.Vector3()).y || 1.7;
       m.scale.setScalar(BOT_MODEL_H / h);
       m.position.y -= new THREE.Box3().setFromObject(m).min.y;
-      m.traverse((o) => { if (o.isMesh) this.skinMeshes.push(o); });
+      
+      // Ensure every sub-mesh in the GLTF model correctly routes back to this Bot instance for hits
+      m.traverse((o) => { 
+        if (o.isMesh) {
+          this.skinMeshes.push(o);
+          o.userData.bot = this;
+          // Top 30% of model counts as headshot, rest as body
+          const isHead = o.position.y > BOT_MODEL_H * 0.65;
+          o.userData.part = isHead ? 'head' : 'body';
+        }
+      });
+
       this.modelWrap = new THREE.Group();
       this.modelWrap.rotation.y = BOT_MODEL_YAW;
       this.modelWrap.add(m);
       this.group.add(this.modelWrap);
+
+      // Hide primitive hitboxes if 3D model is active
       for (const hb of [this.body, this.head, this.visor]) { hb.material.visible = false; hb.castShadow = false; }
+
       this.mixer = new THREE.AnimationMixer(m);
       for (const [key, clipName] of Object.entries(CLIPS)) {
         const clip = asset.animations.find((a) => a.name === clipName);
@@ -363,4 +382,225 @@ export class Game {
     this.reloading = false; this.reloadEnd = 0;
     this.lastShot = 0;
     this.recoilKick = 0;
-    this.shake = { until: 0, power: 0, dur:
+    this.shake = { until: 0, power: 0, dur: 0.001 };
+
+    this.abilityState = {};
+    for (const slot of ['C', 'Q', 'E']) {
+      const ab = agent.abilities[slot];
+      const max = (ab && ab.charges) || 1;
+      this.abilityState[slot] = { count: max, max, cd: (ab && ab.cd) || 0, pending: [] };
+    }
+    this.effects = [];
+    this.projectiles = [];
+    this.zones = [];
+    this.gateMarker = null;
+    this.ultActiveUntil = 0;
+
+    this.keys = {};
+    this.mouseDown = false;
+    this.paused = false;
+    this.running = false;
+    this.clock = new THREE.Clock();
+
+    this.bots = [];
+    for (let i = 0; i < BOT_COUNT; i++) {
+      const asset = this.models ? this.models.skeleton(0x7f111a) : null;
+      const bot = new Bot(this.scene, this.randomSpawn(), BOT_NAMES[i % BOT_NAMES.length], asset);
+      if (bot.mixer) this.mixers.push(bot.mixer);
+      this.bots.push(bot);
+    }
+
+    this.buildViewmodel();
+    this.bindEvents();
+    this.resize();
+  }
+
+  buildViewmodel() {
+    this.viewmodel = new THREE.Group();
+    const gunMat = new THREE.MeshStandardMaterial({ color: 0x1e2d3d, roughness: 0.4, metalness: 0.6, emissive: 0x0f1722, emissiveIntensity: 1 });
+    const accent = new THREE.MeshStandardMaterial({ color: new THREE.Color(this.agent.color), emissive: new THREE.Color(this.agent.color), emissiveIntensity: 1.3 });
+    const body = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.12, 0.5), gunMat);
+    const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.022, 0.3, 8), gunMat);
+    barrel.rotation.x = Math.PI / 2; barrel.position.set(0, 0.03, -0.38);
+    const stripe = new THREE.Mesh(new THREE.BoxGeometry(0.074, 0.02, 0.3), accent);
+    stripe.position.set(0, 0.045, -0.05);
+    
+    this.procGun = new THREE.Group();
+    this.procGun.add(body, barrel, stripe);
+    this.gunMount = new THREE.Group();
+    this.muzzle = new THREE.PointLight(0x00f5ff, 0, 4);
+    this.muzzle.position.set(0, 0.03, -0.55);
+    this.viewmodel.add(this.procGun, this.gunMount, this.muzzle);
+    this.viewmodel.scale.setScalar(0.62);
+    this.viewmodel.traverse((o) => { o.frustumCulled = false; });
+    
+    this.vmZ = -0.45;
+    this.viewmodel.position.set(0.26, -0.22, this.vmZ);
+    this.vmScene = new THREE.Scene();
+    this.vmScene.add(this.viewmodel);
+    this.vmScene.add(new THREE.HemisphereLight(0xdbeafe, 0x1a2634, 2.6));
+    const vmKey = new THREE.DirectionalLight(0xffffff, 3.2);
+    vmKey.position.set(0.6, 0.8, 0.4);
+    this.vmScene.add(vmKey);
+    this.vmCamera = new THREE.PerspectiveCamera(62, 1, 0.01, 10);
+    this.setGunModel(this.weapon.id);
+  }
+
+  async setGunModel(weaponId) {
+    if (!this.models) return;
+    let mount = null;
+    try { mount = await this.models.gun(weaponId); } catch { mount = null; }
+    if (!this.gunMount) return;
+    this.gunMount.clear();
+    if (mount) {
+      this.gunMount.add(mount);
+      this.gunMount.traverse((o) => { o.frustumCulled = false; });
+      this.procGun.visible = false;
+    } else {
+      this.procGun.visible = true;
+    }
+  }
+
+  bindEvents() {
+    this._onKeyDown = (e) => this.onKey(e, true);
+    this._onKeyUp = (e) => this.onKey(e, false);
+    this._onMouseMove = (e) => {
+      if (!this.locked() || this.paused) return;
+      const s = 0.0021 * settings.sens;
+      this.yaw -= e.movementX * s;
+      this.pitch -= e.movementY * s;
+      this.pitch = Math.max(-1.45, Math.min(1.45, this.pitch));
+    };
+    this._onMouseDown = (e) => { if (e.button === 0) { this.mouseDown = true; this.tryShoot(); } };
+    this._onMouseUp = (e) => { if (e.button === 0) this.mouseDown = false; };
+    this._onLockChange = () => {
+      if (!this.locked() && this.running && !this.dead && document.getElementById('buy-menu').classList.contains('hidden')) {
+        this.setPaused(true);
+      }
+    };
+    this._onResize = () => this.resize();
+
+    document.addEventListener('keydown', this._onKeyDown);
+    document.addEventListener('keyup', this._onKeyUp);
+    document.addEventListener('mousemove', this._onMouseMove);
+    document.addEventListener('mousedown', this._onMouseDown);
+    document.addEventListener('mouseup', this._onMouseUp);
+    document.addEventListener('pointerlockchange', this._onLockChange);
+    window.addEventListener('resize', this._onResize);
+  }
+
+  destroy() {
+    this.running = false;
+    document.removeEventListener('keydown', this._onKeyDown);
+    document.removeEventListener('keyup', this._onKeyUp);
+    document.removeEventListener('mousemove', this._onMouseMove);
+    document.removeEventListener('mousedown', this._onMouseDown);
+    document.removeEventListener('mouseup', this._onMouseUp);
+    document.removeEventListener('pointerlockchange', this._onLockChange);
+    window.removeEventListener('resize', this._onResize);
+    if (this.locked()) document.exitPointerLock();
+    this.renderer.dispose();
+  }
+
+  locked() { return document.pointerLockElement === this.canvas; }
+  lock() { try { this.canvas.requestPointerLock()?.catch?.(() => {}); } catch {} }
+
+  onKey(e, down) {
+    if (!this.running) return;
+    this.keys[e.code] = down;
+    if (!down) return;
+    if (e.code === 'KeyB') { this.toggleBuy(); return; }
+    if (this.paused || this.dead) return;
+    if (e.code === 'KeyR') this.startReload();
+    if (e.code === 'KeyC') this.useAbility('C');
+    if (e.code === 'KeyQ') this.useAbility('Q');
+    if (e.code === 'KeyE') this.useAbility('E');
+    if (e.code === 'KeyX') this.useAbility('X');
+    if (/^Digit[1-9]$/.test(e.code) && !document.getElementById('buy-menu').classList.contains('hidden')) {
+      this.cb.onQuickBuy(parseInt(e.code.slice(5), 10) - 1);
+    }
+  }
+
+  setPaused(p) {
+    this.paused = p;
+    document.getElementById('pause-menu').classList.toggle('hidden', !p);
+    if (!p) this.lock();
+  }
+
+  toggleBuy() {
+    const menu = document.getElementById('buy-menu');
+    const open = menu.classList.contains('hidden');
+    menu.classList.toggle('hidden', !open);
+    if (open) {
+      if (document.pointerLockElement) document.exitPointerLock();
+      this.paused = true;
+      document.getElementById('pause-menu').classList.add('hidden');
+    } else {
+      this.paused = false;
+      this.lock();
+    }
+  }
+
+  start() {
+    this.running = true;
+    this.lock();
+    this.clock.start();
+    this.applySettings();
+    this.loop();
+  }
+
+  resize() {
+    const w = innerWidth, h = innerHeight;
+    this.renderer.setSize(w, h, false);
+    this.camera.aspect = w / h;
+    this.camera.updateProjectionMatrix();
+    if (this.vmCamera) {
+      this.vmCamera.aspect = w / h;
+      this.vmCamera.updateProjectionMatrix();
+    }
+  }
+
+  applySettings() {
+    this.baseFov = settings.fov;
+    if (!this.aiming) { this.camera.fov = this.baseFov; this.camera.updateProjectionMatrix(); }
+    const fpsEl = document.getElementById('fps-meter');
+    if (fpsEl) fpsEl.classList.toggle('hidden', !settings.showFps);
+  }
+
+  randomSpawn() {
+    return this.spawnPoints[Math.floor(Math.random() * this.spawnPoints.length)].clone();
+  }
+
+  equip(weapon) {
+    this.weapon = weapon;
+    this.mag = weapon.mag;
+    this.reloading = false;
+    this.setGunModel(weapon.id);
+    this.sfx.play('reload');
+    this.updateHud();
+  }
+
+  tryBuy(weapon) {
+    if (!weapon || weapon.id === this.weapon.id) return false;
+    if (this.money < weapon.price) { this.sfx.play('hit'); return false; }
+    this.money -= weapon.price;
+    this.equip(weapon);
+    return true;
+  }
+
+  startReload() {
+    if (this.reloading || this.mag === this.weapon.mag || this.weapon === BLADE_STORM) return;
+    this.reloading = true;
+    this.reloadEnd = this.now() + 1.4;
+    this.sfx.play('reload');
+  }
+
+  now() { return performance.now() / 1000; }
+
+  tryShoot() {
+    if (!this.running || this.paused || this.dead || !this.locked()) return;
+    const t = this.now();
+    const interval = 1 / (this.weapon.fireRate * this.fireRateMult);
+    if (t - this.lastShot < interval) return;
+    if (this.reloading) return;
+    if (
