@@ -206,7 +206,7 @@ function buildMap(scene) {
 
 const BOT_NAMES = ['REYNA-BOT', 'PHX-UNIT', 'OMEN-77', 'CYPHER.EXE', 'KAYO-MK2', 'VIPER-X', 'SAGE-9000'];
 const BOT_MODEL_YAW = 0;
-const BOT_MODEL_H = 1.75; // Proportional realistic height matching player view
+const BOT_MODEL_H = 1.75;
 
 class Bot {
   constructor(scene, spawn, name, asset = null) {
@@ -224,7 +224,6 @@ class Bot {
 
     this.group = new THREE.Group();
     
-    // Clean proportional fallback hitboxes matching 1.75m height
     this.body = new THREE.Mesh(new THREE.CapsuleGeometry(0.32, 0.9, 4, 10), bodyMat);
     this.body.position.y = 0.85;
     this.body.castShadow = true;
@@ -241,7 +240,6 @@ class Bot {
 
     this.group.add(this.body, this.head, this.visor);
     
-    // Tag fallbacks for raycasting
     this.body.userData.bot = this; this.body.userData.part = 'body';
     this.head.userData.bot = this; this.head.userData.part = 'head';
     this.group.position.copy(spawn);
@@ -257,12 +255,10 @@ class Bot {
       m.scale.setScalar(BOT_MODEL_H / h);
       m.position.y -= new THREE.Box3().setFromObject(m).min.y;
       
-      // Ensure every sub-mesh in the GLTF model correctly routes back to this Bot instance for hits
       m.traverse((o) => { 
         if (o.isMesh) {
           this.skinMeshes.push(o);
           o.userData.bot = this;
-          // Top 30% of model counts as headshot, rest as body
           const isHead = o.position.y > BOT_MODEL_H * 0.65;
           o.userData.part = isHead ? 'head' : 'body';
         }
@@ -273,7 +269,6 @@ class Bot {
       this.modelWrap.add(m);
       this.group.add(this.modelWrap);
 
-      // Hide primitive hitboxes if 3D model is active
       for (const hb of [this.body, this.head, this.visor]) { hb.material.visible = false; hb.castShadow = false; }
 
       this.mixer = new THREE.AnimationMixer(m);
@@ -509,16 +504,24 @@ export class Game {
     if (!this.running) return;
     this.keys[e.code] = down;
     if (!down) return;
+
     if (e.code === 'KeyB') { this.toggleBuy(); return; }
+
+    const buyMenuOpen = !document.getElementById('buy-menu').classList.contains('hidden');
+    if (buyMenuOpen) {
+      if (e.code === 'Escape') { this.toggleBuy(); return; }
+      if (/^Digit[1-9]$/.test(e.code)) {
+        this.cb.onQuickBuy(parseInt(e.code.slice(5), 10) - 1);
+        return;
+      }
+    }
+
     if (this.paused || this.dead) return;
     if (e.code === 'KeyR') this.startReload();
     if (e.code === 'KeyC') this.useAbility('C');
     if (e.code === 'KeyQ') this.useAbility('Q');
     if (e.code === 'KeyE') this.useAbility('E');
     if (e.code === 'KeyX') this.useAbility('X');
-    if (/^Digit[1-9]$/.test(e.code) && !document.getElementById('buy-menu').classList.contains('hidden')) {
-      this.cb.onQuickBuy(parseInt(e.code.slice(5), 10) - 1);
-    }
   }
 
   setPaused(p) {
@@ -603,4 +606,92 @@ export class Game {
     const interval = 1 / (this.weapon.fireRate * this.fireRateMult);
     if (t - this.lastShot < interval) return;
     if (this.reloading) return;
-    if (
+    if (this.mag <= 0) { this.startReload(); return; }
+    this.lastShot = t;
+    if (this.weapon !== BLADE_STORM) this.mag--;
+
+    const pellets = this.weapon.pellets || 1;
+    for (let i = 0; i < pellets; i++) this.fireRay();
+
+    this.recoilKick = Math.min(this.recoilKick + this.weapon.recoil, 0.09);
+    this.muzzle.intensity = 14;
+    this.vmZ = -0.38;
+    this.sfx.play('shot', this.weapon);
+    this.updateHud();
+  }
+
+  fireRay() {
+    const moving = this.vel.lengthSq() > 4;
+    const spread = this.weapon.spread * (moving ? 2.6 : 1) + this.recoilKick * 0.35;
+    const dir = this._v1.set(0, 0, -1).applyQuaternion(this.camera.quaternion);
+    const jit = this._v2.set((Math.random() - 0.5) * spread, (Math.random() - 0.5) * spread, 0).applyQuaternion(this.camera.quaternion);
+    dir.add(jit).normalize();
+
+    this.raycaster.set(this.camera.getWorldPosition(this._v3), dir);
+    this.raycaster.near = 0; this.raycaster.far = 200;
+    
+    const targets = this._rayTargets; 
+    targets.length = 0;
+    for (let i = 0; i < this.shootables.length; i++) targets.push(this.shootables[i]);
+    for (let i = 0; i < this.bots.length; i++) {
+      if (this.bots[i].alive) {
+        if (this.bots[i].modelWrap) {
+          for (const m of this.bots[i].skinMeshes) targets.push(m);
+        } else {
+          targets.push(this.bots[i].body, this.bots[i].head);
+        }
+      }
+    }
+
+    const hits = this.raycaster.intersectObjects(targets, false);
+    const hit = hits[0];
+
+    const end = hit ? hit.point : this.raycaster.ray.at(120, this._v2);
+    this.spawnTracer(this.raycaster.ray.origin, end);
+
+    if (hit && hit.object.userData.bot) {
+      const bot = hit.object.userData.bot;
+      const isHead = hit.object.userData.part === 'head';
+      const dmg = Math.round(this.weapon.dmg * (isHead ? this.weapon.head : 1));
+      const killed = bot.damage(dmg);
+      this.showHitmarker(killed);
+      this.sfx.play(killed ? 'kill' : 'hit');
+      if (killed) this.onKill(bot, isHead);
+    } else if (hit) {
+      this.spawnImpact(hit.point);
+    }
+  }
+
+  onKill(bot, headshot) {
+    this.kills++;
+    this.ultPoints = Math.min(this.ultPoints + 1, this.agent.abilities.X.pts);
+    this.money = Math.min(this.money + (headshot ? 400 : 300), 9000);
+    this.addShake(headshot ? 0.05 : 0.035, 0.16);
+    const now = this.now();
+    this.killStreak = (now - this.lastKillTime < 4.5) ? this.killStreak + 1 : 1;
+    this.lastKillTime = now;
+    if (this.killStreak >= 2) {
+      this.sfx.play('streak', this.killStreak);
+      this.cb.onStreak?.(this.killStreak);
+    }
+    this.cb.onKillFeed(`YOU`, bot.name, headshot, false);
+    this.cb.onScore(this.kills, this.deaths);
+    this.updateHud();
+  }
+
+  spawnTracer(from, to) {
+    let line = this.tracerPool.pop();
+    if (!line) {
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(6), 3));
+      line = new THREE.Line(geo, this.tracerMat);
+      line.frustumCulled = false;
+      this.scene.add(line);
+    }
+    const pos = line.geometry.attributes.position;
+    pos.setXYZ(0, from.x, from.y - 0.06, from.z);
+    pos.setXYZ(1, to.x, to.y, to.z);
+    pos.needsUpdate = true;
+    line.visible = true;
+    this.effects.push({ mesh: line, until: this.now() + 0.05, pool: this.tracerPool });
+  }
